@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de Pacientes - Consultório Odontológico</title>
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f0f4f8;
+            margin: 0;
+            padding: 40px;
+            color: #333;
+        }
+        h1, h2 {
+            text-align: center;
+            color: #2a6f97;
+        }
+        form, table {
+            background-color: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+            padding: 25px;
+            margin: 20px auto;
+            max-width: 800px;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 12px;
+            margin-top: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #ccd6dd;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        label {
+            font-weight: 500;
+            color: #555;
+        }
+        button {
+            background-color: #2a6f97;
+            color: #fff;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #1e567a;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        th {
+            background-color: #2a6f97;
+            color: white;
+        }
+        img {
+            max-width: 80px;
+            max-height: 80px;
+            border-radius: 6px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .action-button {
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .action-button:hover {
+            background-color: #c0392b;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Registro de Pacientes</h1>
+
+<form id="patientForm">
+    <label>Nome do Paciente</label>
+    <input type="text" id="nome" required>
+
+    <label>Data do Procedimento</label>
+    <input type="date" id="dataProcedimento" required>
+
+    <label>Procedimento Realizado</label>
+    <input type="text" id="procedimento" required>
+
+    <label>Maiores Informações</label>
+    <textarea id="informacoes" placeholder="Observações ou detalhes adicionais"></textarea>
+
+    <label>Foto do Procedimento/Observação</label>
+    <input type="file" id="foto" accept="image/*">
+
+    <label>Valor (R$)</label>
+    <input type="number" id="valor" required>
+
+    <label>Vai ter retorno?</label>
+    <select id="temRetorno" required>
+        <option value="">Selecione</option>
+        <option value="Sim">Sim</option>
+        <option value="Não">Não</option>
+    </select>
+
+    <label>Data do Retorno</label>
+    <input type="date" id="retorno" disabled>
+
+    <button type="submit">Adicionar Registro</button>
+</form>
+
+<h2>Pacientes Registrados</h2>
+<table id="patientsTable">
+    <thead>
+        <tr>
+            <th>Nome</th>
+            <th>Data</th>
+            <th>Procedimento</th>
+            <th>Informações</th>
+            <th>Foto</th>
+            <th>Valor</th>
+            <th>Retorno</th>
+            <th>Ações</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-storage-compat.js"></script>
+
+<script>
+    // CONFIGURAÇÃO DO FIREBASE → ALTERE PARA OS DADOS DO SEU PROJETO
+    const firebaseConfig = {
+        apiKey: "AIzaSyAd5ybUZugPNfXO97F_x8LATYvntkVu6Wg",
+        authDomain: "consultorio-ana-clara.firebaseapp.com",
+        databaseURL: "https://consultorio-ana-clara-default-rtdb.firebaseio.com/",
+        projectId: "consultorio-ana-clara",
+        storageBucket: "consultorio-ana-clara.firebasestorage.app",
+        messagingSenderId: "1013737106587",
+        appId: "1:1013737106587:web:a3c4ce690dd7c7f3d2aa3e"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+
+    const db = firebase.database();
+    const storage = firebase.storage();
+
+    const form = document.getElementById('patientForm');
+    const tableBody = document.querySelector('#patientsTable tbody');
+    const temRetorno = document.getElementById('temRetorno');
+    const retorno = document.getElementById('retorno');
+    const fotoInput = document.getElementById('foto');
+
+    temRetorno.addEventListener('change', () => {
+        retorno.disabled = temRetorno.value !== "Sim";
+        retorno.required = temRetorno.value === "Sim";
+        if (temRetorno.value !== "Sim") retorno.value = "";
+    });
+
+    function loadPatients() {
+        db.ref("pacientes").once("value", (snapshot) => {
+            tableBody.innerHTML = "";
+            snapshot.forEach((child) => {
+                const p = child.val();
+                const row = document.createElement('tr');
+
+                row.innerHTML = `
+                    <td>${p.nome}</td>
+                    <td>${p.dataProcedimento}</td>
+                    <td>${p.procedimento}</td>
+                    <td>${p.informacoes}</td>
+                    <td>${p.fotoUrl ? `<img src="${p.fotoUrl}" alt="Foto">` : "Sem foto"}</td>
+                    <td>R$ ${p.valor}</td>
+                    <td>${p.temRetorno === "Sim" ? p.retorno : "Não"}</td>
+                    <td>
+                        <button class="action-button" onclick="removePatient('${child.key}')">Remover</button>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+        });
+    }
+
+    function removePatient(key) {
+        db.ref("pacientes/" + key).remove().then(() => {
+            loadPatients();
+        });
+    }
+
+    form.addEventListener('submit', (e) => {
+        e.preventDefault();
+
+        const file = fotoInput.files[0];
+        if (file) {
+            const storageRef = storage.ref("fotos/" + file.name);
+            storageRef.put(file).then(snapshot => {
+                return snapshot.ref.getDownloadURL();
+            }).then(downloadURL => {
+                savePatient(downloadURL);
+            });
+        } else {
+            savePatient(null);
+        }
+    });
+
+    function savePatient(fotoUrl) {
+        const patient = {
+            nome: document.getElementById('nome').value,
+            dataProcedimento: document.getElementById('dataProcedimento').value,
+            procedimento: document.getElementById('procedimento').value,
+            informacoes: document.getElementById('informacoes').value,
+            fotoUrl: fotoUrl,
+            valor: document.getElementById('valor').value,
+            temRetorno: document.getElementById('temRetorno').value,
+            retorno: document.getElementById('retorno').value
+        };
+
+        db.ref("pacientes").push(patient).then(() => {
+            form.reset();
+            retorno.disabled = true;
+            loadPatients();
+        });
+    }
+
+    loadPatients();
+</script>
+
+</body>
+</html>
